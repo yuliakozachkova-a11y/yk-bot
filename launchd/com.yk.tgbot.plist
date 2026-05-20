@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.yk.tgbot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/yuliia/yk-bot/venv/bin/python3</string>
+        <string>-m</string>
+        <string>bot.main</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yuliia/yk-bot</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/yuliia/yk-bot/logs/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/yuliia/yk-bot/logs/launchd.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

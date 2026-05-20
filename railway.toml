@@ -1,0 +1,11 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python -m bot.main"
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 10
+
+[[deploy.volumes]]
+mountPath = "/app/data"
+name = "data"

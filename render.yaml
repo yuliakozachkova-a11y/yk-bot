@@ -1,0 +1,37 @@
+services:
+  - type: worker
+    name: yk-media-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot.main
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: YK_Media_Bot
+      - key: TELEGRAM_BOT_ID
+        value: "8082463790"
+      - key: TELEGRAM_CHANNEL_ID
+        value: "-1001995442282"
+      - key: TELEGRAM_CHANNEL_TITLE
+        value: "КОЗАЧКОВА ЮЛІЯ"
+      - key: TELEGRAM_LINKED_CHAT_ID
+        value: "-1002045261900"
+      - key: TELEGRAM_BASELINE_SUBSCRIBERS
+        value: "6218"
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
