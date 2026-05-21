@@ -19,6 +19,7 @@ from . import config, db
 from .handlers import (
     cmd_delete,
     cmd_help,
+    cmd_howstats,
     cmd_missed,
     cmd_next3,
     cmd_pause,
@@ -35,7 +36,7 @@ from .handlers import (
     on_photo,
     on_text,
 )
-from .publisher import publish_due, snapshot_subscribers
+from .publisher import publish_due, snapshot_subscribers, sunday_stats_reminder
 from .youtube_watcher import poll_all_channels
 
 logging.basicConfig(
@@ -83,6 +84,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("missed", cmd_missed))
+    app.add_handler(CommandHandler("howstats", cmd_howstats))
     app.add_handler(CommandHandler("photos", cmd_photos))
 
     # Inline buttons
@@ -104,6 +106,13 @@ def build_app() -> Application:
 
         # Daily subscribers snapshot — at 23:55 Kyiv time
         app.job_queue.run_daily(snapshot_subscribers, time(hour=23, minute=55, tzinfo=tz))
+
+        # Sunday 20:00 Kyiv — ping Yulia to send channel stats screenshot
+        app.job_queue.run_daily(
+            sunday_stats_reminder,
+            time(hour=20, minute=0, tzinfo=tz),
+            days=(6,),  # 6 = Sunday in python-telegram-bot's day numbering
+        )
 
     return app
 

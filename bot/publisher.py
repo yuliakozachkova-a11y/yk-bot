@@ -159,3 +159,25 @@ async def snapshot_subscribers(context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         log.exception("snapshot failed")
         db.log_event("snapshot_failed", str(e))
+
+
+async def sunday_stats_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Every Sunday 20:00 Kyiv — remind Yulia to send channel stats screenshot."""
+    owner_id_raw = db.get_setting("owner_tg_id")
+    if not owner_id_raw:
+        return
+    try:
+        await context.bot.send_message(
+            int(owner_id_raw),
+            "📊 НЕДІЛЬНЕ НАГАДУВАННЯ — статистика каналу\n\n"
+            "Скинь мені скрін статистики каналу за цей тиждень. Це дасть мені перегляди постів, які я не бачу через Bot API.\n\n"
+            "━━━ ШВИДКА ІНСТРУКЦІЯ ━━━\n"
+            "1. Telegram → канал «КОЗАЧКОВА ЮЛІЯ» → назва каналу вгорі → «Статистика»\n"
+            "2. Скрін(и) екрану (Cmd+Shift+4 на Mac, скрін на телефоні)\n"
+            "3. Надішли всі скріни в цей чат\n\n"
+            "Потрібно: ~2 хв твого часу.\n"
+            "Я збережу скріни → проаналізую → у наступному batch постів врахую що зайшло, а що ні.\n\n"
+            "Повна інструкція: /howstats"
+        )
+    except Exception as e:
+        log.exception("sunday_stats_reminder failed: %s", e)

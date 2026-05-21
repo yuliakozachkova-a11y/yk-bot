@@ -48,7 +48,8 @@ MENU_MESSAGE = (
     "/today — сьогодні\n"
     "/tomorrow — завтра\n"
     "/plan — весь горизонт\n"
-    "/missed — пропущені (коли Mac був off)\n\n"
+    "/missed — пропущені (коли Mac був off)\n"
+    "/howstats — як надсилати стат каналу\n\n"
     "🎛 НА КОЖНОМУ ПОСТІ КНОПКИ\n"
     "📤 Publish Now · ✏️ Edit Text\n"
     "🖼 Change Image · ⏰ Reschedule · 🗑 Delete\n\n"
@@ -280,6 +281,40 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ---------- /status ----------
 
+async def cmd_howstats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show instruction how to take channel statistics screenshot."""
+    if not is_owner(update):
+        return
+    msg = (
+        "📊 ЯК ЗРОБИТИ СКРІН СТАТИСТИКИ КАНАЛУ\n\n"
+        "Це потрібно раз на тиждень — щоб я бачив перегляди постів і покращував контент.\n\n"
+        "━━━ НА ТЕЛЕФОНІ ━━━\n\n"
+        "1. Відкрий додаток Telegram\n"
+        "2. Зайди в канал «КОЗАЧКОВА ЮЛІЯ»\n"
+        "3. Натисни на назву каналу вгорі\n"
+        "4. У меню обери «Статистика» (Statistics)\n"
+        "5. Прокрути екран — побачиш:\n"
+        "   • Зростання підписників\n"
+        "   • Перегляди постів\n"
+        "   • Графіки активності\n"
+        "6. Зроби 2-3 скріни (статистика + список постів з переглядами)\n"
+        "7. Надішли всі скріни в цей чат\n\n"
+        "━━━ НА КОМПʼЮТЕРІ ━━━\n\n"
+        "1. Telegram Desktop\n"
+        "2. Канал → ⋮ (три крапки) → Statistics\n"
+        "3. Cmd+Shift+4 (Mac) → скрін\n"
+        "4. Надішли в цей чат\n\n"
+        "━━━ ЩО Я ЗРОБЛЮ ━━━\n\n"
+        "✓ Збережу скріни локально з датою\n"
+        "✓ Обчислю engagement по жанрах\n"
+        "✓ Розрахую які формати заходять найкраще\n"
+        "✓ У наступному batch — більше тих що зайшли, менше тих що ні\n\n"
+        "📅 НАГАДУВАННЯ: кожне воскресенье 20:00 я нагадаю.\n"
+        "Можеш надсилати раніше — я завжди приймаю."
+    )
+    await update.message.reply_text(msg)
+
+
 async def cmd_missed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show posts that missed their slot — Yulia decides what to do."""
     if not is_owner(update):
@@ -494,18 +529,49 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """If user is in 'edit image' mode → attach this photo to the post."""
+    """Photo received from owner. Routes:
+    - 'editing image' mode → attach to post
+    - otherwise → save as channel statistics screenshot
+    """
     if not is_owner(update):
         return
-    pid = context.user_data.pop("editing_image_post_id", None)
     msg = update.message
-    if not pid:
-        await msg.reply_text(
-            "🖼 Фото отримав. Якщо хочеш прикріпити його до конкретного поста — натисни '🖼 Change Image' у /plan, потім надішли фото."
-        )
-        return
-    # Use the largest photo size
     photo = msg.photo[-1]
     tg_file_id = photo.file_id
-    db.update_post(pid, media_type="photo", media_file_id=tg_file_id, media_path=None)
-    await msg.reply_text(f"✅ Картинку #{pid} замінено на твоє нове фото.")
+
+    # Mode: editing post image
+    pid = context.user_data.pop("editing_image_post_id", None)
+    if pid:
+        db.update_post(pid, media_type="photo", media_file_id=tg_file_id, media_path=None)
+        await msg.reply_text(f"✅ Картинку #{pid} замінено на твоє нове фото.")
+        return
+
+    # Otherwise — assume it's a stats screenshot, save it
+    import os
+    from datetime import datetime
+    from . import config
+    stats_dir = config.DATA_DIR / "stats_screenshots"
+    stats_dir.mkdir(exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    file = await msg.photo[-1].get_file()
+    out_path = stats_dir / f"stats_{ts}.jpg"
+    await file.download_to_drive(str(out_path))
+
+    # Update last stats received
+    db.set_setting("last_views_screenshot_at", datetime.now().isoformat())
+    count = len(list(stats_dir.glob("stats_*.jpg")))
+
+    caption = (msg.caption or "").strip()
+    db.log_event("stats_screenshot_received", {
+        "file_id": tg_file_id,
+        "path": str(out_path),
+        "caption": caption,
+    })
+
+    await msg.reply_text(
+        f"📊 Скрін статистики збережено\n"
+        f"Файл: stats_{ts}.jpg ({count}-й за весь час)\n"
+        f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"При наступному відкритті Claude я проаналізую цей скрін і додам дані у engagement-розрахунок.\n\n"
+        f"Дякую 🤍"
+    )
