@@ -51,4 +51,12 @@ else:
     except Exception as e:
         print(f"⚠️  Generation error (non-fatal): {e}")
 
+
+# Cloud bootstrap — seed DB if first deploy
+try:
+    import subprocess
+    subprocess.run(["python3", str(ROOT / "scripts" / "cloud_bootstrap.py")], check=False, cwd=str(ROOT))
+except Exception as e:
+    print(f"⚠️  Bootstrap call failed (non-fatal): {e}")
+
 print("✓ Startup check complete")
