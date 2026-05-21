@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from telegram.ext import (
@@ -54,6 +55,17 @@ async def youtube_poll_job(context):
 
 def build_app() -> Application:
     db.init_db()
+
+    # Cloud-safe startup: ensure visuals + schema exist (idempotent)
+    try:
+        import subprocess
+        subprocess.run(
+            ["python3", str(Path(__file__).resolve().parent.parent / "scripts" / "startup_check.py")],
+            check=False,
+        )
+    except Exception as e:
+        log.warning("startup_check failed (non-fatal): %s", e)
+
     app = Application.builder().token(config.BOT_TOKEN).build()
 
     # Commands
