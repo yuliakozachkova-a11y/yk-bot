@@ -49,7 +49,8 @@ MENU_MESSAGE = (
     "/tomorrow — завтра\n"
     "/plan — весь горизонт\n"
     "/missed — пропущені (коли Mac був off)\n"
-    "/howstats — як надсилати стат каналу\n\n"
+    "/howstats — як надсилати стат каналу\n"
+    "/weekly — тижневий фідбек (авто вс 12:00)\n\n"
     "🎛 НА КОЖНОМУ ПОСТІ КНОПКИ\n"
     "📤 Publish Now · ✏️ Edit Text\n"
     "🖼 Change Image · ⏰ Reschedule · 🗑 Delete\n\n"
@@ -280,6 +281,15 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ---------- /status ----------
+
+async def cmd_weekly(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """On-demand weekly report — same as auto-sent on Sunday 12:00."""
+    if not is_owner(update):
+        return
+    from . import analytics
+    report = analytics.compose_weekly_report()
+    await update.message.reply_text(report)
+
 
 async def cmd_howstats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show instruction how to take channel statistics screenshot."""

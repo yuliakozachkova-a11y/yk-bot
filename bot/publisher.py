@@ -161,6 +161,20 @@ async def snapshot_subscribers(context: ContextTypes.DEFAULT_TYPE) -> None:
         db.log_event("snapshot_failed", str(e))
 
 
+async def weekly_report_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Every Sunday 12:00 Kyiv — send weekly feedback report to Yulia in @YK_Media_Bot."""
+    owner_id_raw = db.get_setting("owner_tg_id")
+    if not owner_id_raw:
+        return
+    try:
+        from . import analytics
+        report = analytics.compose_weekly_report()
+        await context.bot.send_message(int(owner_id_raw), report)
+        log.info("Weekly report sent")
+    except Exception as e:
+        log.exception("weekly_report_job failed: %s", e)
+
+
 async def sunday_stats_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Every Sunday 20:00 Kyiv — remind Yulia to send channel stats screenshot."""
     owner_id_raw = db.get_setting("owner_tg_id")

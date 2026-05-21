@@ -32,11 +32,12 @@ from .handlers import (
     cmd_status,
     cmd_today,
     cmd_tomorrow,
+    cmd_weekly,
     on_callback,
     on_photo,
     on_text,
 )
-from .publisher import publish_due, snapshot_subscribers, sunday_stats_reminder
+from .publisher import publish_due, snapshot_subscribers, sunday_stats_reminder, weekly_report_job
 from .youtube_watcher import poll_all_channels
 
 logging.basicConfig(
@@ -85,6 +86,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("missed", cmd_missed))
     app.add_handler(CommandHandler("howstats", cmd_howstats))
+    app.add_handler(CommandHandler("weekly", cmd_weekly))
     app.add_handler(CommandHandler("photos", cmd_photos))
 
     # Inline buttons
@@ -106,6 +108,13 @@ def build_app() -> Application:
 
         # Daily subscribers snapshot — at 23:55 Kyiv time
         app.job_queue.run_daily(snapshot_subscribers, time(hour=23, minute=55, tzinfo=tz))
+
+        # Sunday 12:00 Kyiv — weekly feedback report (auto)
+        app.job_queue.run_daily(
+            weekly_report_job,
+            time(hour=12, minute=0, tzinfo=tz),
+            days=(6,),
+        )
 
         # Sunday 20:00 Kyiv — ping Yulia to send channel stats screenshot
         app.job_queue.run_daily(
