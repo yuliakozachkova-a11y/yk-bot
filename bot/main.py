@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -108,9 +109,39 @@ def build_app() -> Application:
 
 
 def main() -> None:
-    app = build_app()
-    log.info("YK Media Bot starting…")
-    app.run_polling(allowed_updates=["message", "callback_query", "message_reaction", "message_reaction_count"])
+    """
+    Run bot with failover-aware polling.
+
+    Architecture (Yulia 2026-05-21):
+    - Mac (launchd) is PRIMARY — always runs when Mac is on
+    - Cloud (Render) is BACKUP — takes over when Mac is off
+    - Coordination via native Telegram Conflict (409) mechanism:
+      only one client can poll a bot token; the other gets 409 → sleeps.
+    """
+    import asyncio
+    from telegram.error import Conflict
+
+    role = os.environ.get("BOT_ROLE", "primary")  # 'primary' (Mac) or 'backup' (Cloud)
+    log.info(f"YK Media Bot starting in role: {role}")
+
+    while True:
+        try:
+            app = build_app()
+            log.info("Polling started")
+            app.run_polling(allowed_updates=["message", "callback_query", "message_reaction", "message_reaction_count"])
+            break  # graceful shutdown
+        except Conflict as e:
+            wait = 120 if role == "backup" else 30
+            log.warning(f"Conflict (another bot polling). Sleeping {wait}s. Role={role}")
+            import time
+            time.sleep(wait)
+        except KeyboardInterrupt:
+            log.info("Interrupted, exiting.")
+            break
+        except Exception as e:
+            log.exception(f"Unexpected error: {e}. Restarting in 30s.")
+            import time
+            time.sleep(30)
 
 
 if __name__ == "__main__":
