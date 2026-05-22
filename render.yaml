@@ -18,7 +18,7 @@ services:
       - key: PYTHONUNBUFFERED
         value: 1
       - key: BOT_ROLE
-        value: primary
+        value: backup
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_BOT_USERNAME
