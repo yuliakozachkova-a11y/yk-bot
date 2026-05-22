@@ -5,3 +5,17 @@ node_modules/
 .vercel/
 .DS_Store
 *.log
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime data (not in repo)
+data/
+photos/
+logs/
+screenshots/
+*.db
+*.db.backup*
