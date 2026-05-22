@@ -2,7 +2,7 @@ services:
   - type: worker
     name: yk-media-bot
     runtime: python
-    plan: starter
+    plan: free
     region: frankfurt
     branch: main
     buildCommand: pip install -r requirements.txt
