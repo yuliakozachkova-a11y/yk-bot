@@ -169,43 +169,58 @@ def is_safe_to_reuse(file_id: str) -> bool:
 
 def pick_diverse_approved(avoid_recent_subfolders: int = 2) -> dict | None:
     """
-    Pick an approved photo from a subfolder that hasn't been used in the last N picks.
-    Rotation rule (Yulia 2026-05-20): never use photos from the same shoot back-to-back.
+    Pick an approved photo using TRUE round-robin by folder (Yulia 2026-05-26):
+    1. Find the approved folder that was used LEAST RECENTLY (or never).
+    2. Pick a random photo from that folder that respects the 180-day reuse rule.
+
+    Why this beats random-with-bias: when one folder has 18 approved photos and
+    another has 2, RANDOM() heavily favors the big folder. Round-robin guarantees
+    that every shoot gets equal airtime — exactly what Yulia asked for.
     """
     import sqlite3
     from . import config
     con = sqlite3.connect(config.DB_PATH)
     con.row_factory = sqlite3.Row
 
-    # Get last N used subfolders (most recent first)
-    recent_folders = [
-        r["folder"] for r in con.execute(
-            "SELECT DISTINCT folder FROM drive_photos "
-            "WHERE last_used_at IS NOT NULL "
-            "ORDER BY last_used_at DESC LIMIT ?",
-            (avoid_recent_subfolders,),
-        ).fetchall()
-    ]
-
-    # Pick approved photo NOT from recent folders AND not used <180 days
-    placeholders = ",".join("?" * len(recent_folders)) if recent_folders else "''"
-    sql = f"""
-        SELECT * FROM drive_photos
+    # All approved folders ordered by oldest last-used (NULL first = never used)
+    folders = con.execute(
+        """
+        SELECT folder,
+               MAX(last_used_at) AS last_use
+        FROM drive_photos
         WHERE classification='approved'
-          AND (last_used_at IS NULL OR julianday('now') - julianday(last_used_at) > {MIN_DAYS_BEFORE_REUSE})
-          AND folder NOT IN ({placeholders})
-        ORDER BY RANDOM() LIMIT 1
-    """
-    row = con.execute(sql, recent_folders).fetchone()
+        GROUP BY folder
+        ORDER BY (last_use IS NOT NULL), last_use ASC
+        """
+    ).fetchall()
 
-    # Fallback: if all approved are in recent folders, allow oldest one
-    if not row:
+    if not folders:
+        con.close()
+        return None
+
+    # Try folders in order of least-recently-used until one has a free photo
+    for f_row in folders:
+        target_folder = f_row["folder"]
         row = con.execute(
-            "SELECT * FROM drive_photos WHERE classification='approved' "
-            "AND (last_used_at IS NULL OR julianday('now') - julianday(last_used_at) > ?) "
-            "ORDER BY RANDOM() LIMIT 1",
-            (MIN_DAYS_BEFORE_REUSE,),
+            f"""
+            SELECT * FROM drive_photos
+            WHERE classification='approved'
+              AND folder = ?
+              AND (last_used_at IS NULL OR julianday('now') - julianday(last_used_at) > {MIN_DAYS_BEFORE_REUSE})
+            ORDER BY (last_used_at IS NOT NULL), RANDOM()
+            LIMIT 1
+            """,
+            (target_folder,),
         ).fetchone()
+        if row:
+            con.close()
+            return dict(row)
+
+    # All approved photos were used <180 days ago — fallback to oldest
+    row = con.execute(
+        "SELECT * FROM drive_photos WHERE classification='approved' "
+        "ORDER BY last_used_at ASC LIMIT 1"
+    ).fetchone()
     con.close()
     return dict(row) if row else None
 

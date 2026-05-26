@@ -60,6 +60,84 @@ PALETTE_LIGHT = {
     "line": "#A09080",
 }
 
+# === BRAND PALETTES (Yulia 2026-05-26) ===
+# Книжный бренд: темно-синий ИЛИ темно-зеленый, белый, чёрный, оттенки зелёного.
+
+PALETTE_NAVY_BOOK = {
+    "bg_top": (8, 14, 36),         # глубокий navy (как обложка книги)
+    "bg_bottom": (16, 26, 56),
+    "glow_warm": (200, 180, 130),  # тёплый золотой блик
+    "glow_wine": (120, 60, 80),
+    "text": "#F4F0E8",             # тёплый белый
+    "accent": "#D4B86A",           # золото
+    "dim": "#9AA2B8",
+    "line": "#3A4566",
+}
+
+PALETTE_GREEN_DEEP = {
+    "bg_top": (10, 32, 26),        # тёмный изумрудный
+    "bg_bottom": (20, 52, 42),
+    "glow_warm": (180, 220, 180),
+    "glow_wine": (60, 110, 80),
+    "text": "#EFF5EE",
+    "accent": "#A8D5A0",           # светло-зелёный акцент
+    "dim": "#7A998C",
+    "line": "#2D5648",
+}
+
+PALETTE_GREEN_FOREST = {
+    "bg_top": (22, 50, 38),        # лесной зелёный
+    "bg_bottom": (38, 80, 58),
+    "glow_warm": (210, 230, 195),
+    "glow_wine": (80, 130, 95),
+    "text": "#F2F8F0",
+    "accent": "#C9DFB8",
+    "dim": "#88A695",
+    "line": "#3E6A55",
+}
+
+PALETTE_BW = {
+    "bg_top": (245, 245, 245),     # чистый белый
+    "bg_bottom": (228, 228, 228),
+    "glow_warm": (180, 180, 180),
+    "glow_wine": (140, 140, 140),
+    "text": "#0A0A0A",             # глубокий чёрный
+    "accent": "#0A0A0A",           # моноакцент
+    "dim": "#666666",
+    "line": "#B0B0B0",
+}
+
+PALETTE_BLACK = {
+    "bg_top": (8, 8, 10),
+    "bg_bottom": (20, 20, 24),
+    "glow_warm": (200, 200, 180),
+    "glow_wine": (90, 60, 60),
+    "text": "#F0F0F0",
+    "accent": "#E8C97A",           # тёплое золото на чёрном
+    "dim": "#7A7A7A",
+    "line": "#3A3A3A",
+}
+
+# Palette registry — pass `palette` param to any template to override default
+PALETTES: dict[str, dict] = {
+    "cinematic": PALETTE_CINEMATIC,
+    "warm": PALETTE_WARM,
+    "light": PALETTE_LIGHT,
+    "navy_book": PALETTE_NAVY_BOOK,
+    "green_deep": PALETTE_GREEN_DEEP,
+    "green_forest": PALETTE_GREEN_FOREST,
+    "bw": PALETTE_BW,
+    "black": PALETTE_BLACK,
+}
+
+
+def get_palette(name_or_dict) -> dict:
+    if isinstance(name_or_dict, dict):
+        return name_or_dict
+    if name_or_dict in PALETTES:
+        return PALETTES[name_or_dict]
+    return PALETTE_NAVY_BOOK  # brand default
+
 
 # ---------- low-level helpers ----------
 
@@ -123,9 +201,9 @@ def _wrap(text: str, max_chars: int) -> list[str]:
 # ============ TEMPLATE: hero_journey (5-stage path) ============
 
 def make_hero_journey(params: dict, out_path: Path) -> Path:
-    """params: badge, title_line1, title_line2, stages (list of 5 tuples), cta (optional)"""
+    """params: badge, title_line1, title_line2, stages, cta (opt), palette (opt: 'navy_book'|'green_deep'|...)"""
     W, H = 1080, 1080
-    p = PALETTE_CINEMATIC
+    p = get_palette(params.get("palette", "navy_book"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 200, 540, 400, p["glow_warm"], opacity=40)
     _glow(img, 900, 600, 350, p["glow_wine"], opacity=30)
@@ -160,9 +238,9 @@ def make_hero_journey(params: dict, out_path: Path) -> Path:
 # ============ TEMPLATE: checklist (1-7 items) ============
 
 def make_checklist(params: dict, out_path: Path) -> Path:
-    """params: badge, title, items (list of 5-7 strings), cta (optional)"""
+    """params: badge, title, items (5-7 strings), cta (opt), palette (opt)"""
     W, H = 1080, 1080
-    p = PALETTE_WARM
+    p = get_palette(params.get("palette", "green_deep"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 540, 200, 500, p["glow_warm"], opacity=35)
     img = img.convert("RGB")
@@ -200,9 +278,9 @@ def make_checklist(params: dict, out_path: Path) -> Path:
 # ============ TEMPLATE: quote_hero (large quote + author) ============
 
 def make_quote_hero(params: dict, out_path: Path) -> Path:
-    """params: quote (str), author (str, default 'Юлія Козачкова'), source (optional, e.g. 'Ген Грошей')"""
+    """params: quote, author (default 'Юлія Козачкова'), source (opt), palette (opt)"""
     W, H = 1080, 1080
-    p = PALETTE_CINEMATIC
+    p = get_palette(params.get("palette", "navy_book"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 540, 540, 600, p["glow_warm"], opacity=35)
     img = img.convert("RGB")
@@ -242,9 +320,10 @@ def make_live_announce(params: dict, out_path: Path) -> Path:
         date_label (str) — 'Сьогодні' / 'Завтра' / '02.06'
         time_label (str) — '08:30'
         url (str, optional)
+        palette (opt) — default 'navy_book'
     """
     W, H = 1080, 1080
-    p = PALETTE_CINEMATIC
+    p = get_palette(params.get("palette", "navy_book"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 540, 300, 500, p["glow_warm"], opacity=50)
     _glow(img, 540, 900, 400, p["glow_wine"], opacity=35)
@@ -290,9 +369,9 @@ def make_live_announce(params: dict, out_path: Path) -> Path:
 # ============ TEMPLATE: trichlen (three-word manifesto) ============
 
 def make_trichlen(params: dict, out_path: Path) -> Path:
-    """params: words (list of 3 strings), subtitle (optional), source (optional)"""
+    """params: words (3 strings), subtitle (opt), source (opt), palette (opt)"""
     W, H = 1080, 1080
-    p = PALETTE_CINEMATIC
+    p = get_palette(params.get("palette", "green_deep"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 540, 540, 700, p["glow_warm"], opacity=45)
     img = img.convert("RGB")
@@ -327,9 +406,9 @@ def make_trichlen(params: dict, out_path: Path) -> Path:
 # ============ TEMPLATE: book_excerpt ============
 
 def make_book_excerpt(params: dict, out_path: Path) -> Path:
-    """params: chapter (str), excerpt (str), book_title (str)"""
+    """params: chapter, excerpt, book_title, palette (opt) — default 'green_forest'"""
     W, H = 1080, 1080
-    p = PALETTE_WARM
+    p = get_palette(params.get("palette", "green_forest"))
     img = _gradient_bg(W, H, p).convert("RGBA")
     _glow(img, 200, 540, 500, p["glow_warm"], opacity=30)
     img = img.convert("RGB")
@@ -363,6 +442,105 @@ def make_book_excerpt(params: dict, out_path: Path) -> Path:
     return out_path
 
 
+# ============ TEMPLATE: portrait_quote (Yulia's photo + quote overlay) ============
+
+def make_portrait_quote(params: dict, out_path: Path) -> Path:
+    """params:
+        photo_path OR photo_url — image source (Drive lh3 URL OK)
+        quote — text to overlay
+        author (default 'Юлія Козачкова')
+        source (opt) — e.g. 'Ген Грошей'
+        palette (opt) — default 'navy_book'; controls overlay gradient + text
+        side (opt) — 'left' (overlay on left half) or 'bottom' (gradient bottom)
+    """
+    import io
+    import urllib.request
+
+    W, H = 1080, 1080
+    p = get_palette(params.get("palette", "navy_book"))
+    side = params.get("side", "bottom")
+
+    # Load photo
+    photo_path = params.get("photo_path")
+    photo_url = params.get("photo_url")
+    if photo_path:
+        photo = Image.open(photo_path).convert("RGB")
+    elif photo_url:
+        req = urllib.request.Request(photo_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read()
+        photo = Image.open(io.BytesIO(data)).convert("RGB")
+    else:
+        raise ValueError("portrait_quote needs photo_path or photo_url")
+
+    # Cover-fit photo to square canvas
+    photo_w, photo_h = photo.size
+    scale = max(W / photo_w, H / photo_h)
+    new_w, new_h = int(photo_w * scale), int(photo_h * scale)
+    photo = photo.resize((new_w, new_h), Image.LANCZOS)
+    left = (new_w - W) // 2
+    top = (new_h - H) // 2
+    photo = photo.crop((left, top, left + W, top + H))
+
+    img = photo.convert("RGBA")
+
+    # Overlay gradient — bottom half darkened for readability
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    if side == "bottom":
+        for y in range(H):
+            if y < H // 2:
+                continue
+            t = (y - H // 2) / (H // 2)
+            alpha = int(200 * (t ** 1.2))
+            r, g, b = p["bg_top"]
+            od.line([(0, y), (W, y)], fill=(r, g, b, alpha))
+    else:  # left
+        for x in range(W):
+            if x > W * 0.6:
+                continue
+            t = 1 - (x / (W * 0.6))
+            alpha = int(220 * (t ** 1.2))
+            r, g, b = p["bg_top"]
+            od.line([(x, 0), (x, H)], fill=(r, g, b, alpha))
+
+    img = Image.alpha_composite(img, overlay).convert("RGB")
+    d = ImageDraw.Draw(img)
+
+    quote = params["quote"]
+    lines = _wrap(quote, 30)
+    line_height = 56
+    total_h = len(lines) * line_height
+
+    if side == "bottom":
+        y_start = H - 240 - total_h // 2
+        for line in lines:
+            d.text((W // 2, y_start), line, fill=p["text"], anchor="mm", font=_font(36, bold=True))
+            y_start += line_height
+        # divider + author
+        d.line((W // 2 - 100, H - 130, W // 2 + 100, H - 130), fill=p["accent"], width=2)
+        author = params.get("author", "Юлія Козачкова")
+        d.text((W // 2, H - 95), f"— {author}", fill=p["accent"], anchor="mm", font=_font(22, bold=True))
+        source = params.get("source")
+        if source:
+            d.text((W // 2, H - 60), source, fill=p["text"], anchor="mm", font=_font(18, italic=True))
+    else:  # left
+        # quote on left
+        y = H // 2 - total_h // 2
+        for line in lines:
+            d.text((40, y), line, fill=p["text"], anchor="lm", font=_font(36, bold=True))
+            y += line_height
+        d.line((40, H - 130, 240, H - 130), fill=p["accent"], width=2)
+        author = params.get("author", "Юлія Козачкова")
+        d.text((40, H - 95), f"— {author}", fill=p["accent"], anchor="lm", font=_font(22, bold=True))
+        source = params.get("source")
+        if source:
+            d.text((40, H - 60), source, fill=p["text"], anchor="lm", font=_font(18, italic=True))
+
+    img.save(out_path, quality=95, optimize=True)
+    return out_path
+
+
 # ---------- registry ----------
 
 TEMPLATES: dict[str, Callable[[dict, Path], Path]] = {
@@ -372,6 +550,7 @@ TEMPLATES: dict[str, Callable[[dict, Path], Path]] = {
     "live_announce": make_live_announce,
     "trichlen": make_trichlen,
     "book_excerpt": make_book_excerpt,
+    "portrait_quote": make_portrait_quote,
 }
 
 
