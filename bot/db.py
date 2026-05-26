@@ -95,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_channel_activity_posted ON channel_activity(poste
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT,                         -- 'text' | 'voice' | 'photo' | 'forward'
+    branch TEXT DEFAULT 'inbox',       -- 'planning' | 'ideas' | 'comms' | 'stats' | 'settings' | 'inbox'
     content TEXT,                      -- text content OR file path for voice/photo
     transcript TEXT,                   -- voice transcript (filled later)
     tags TEXT,                         -- JSON array of tags (optional)
@@ -112,6 +113,19 @@ DAILY_POST_QUOTA = 3
 def init_db() -> None:
     with sqlite3.connect(config.DB_PATH) as conn:
         conn.executescript(SCHEMA)
+        # Lightweight migrations for older DBs that don't have the new columns
+        for table, col, definition in (
+            ("notes", "branch", "TEXT DEFAULT 'inbox'"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+        # Indexes that depend on migrated columns
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_branch ON notes(branch)")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
 
 
@@ -322,24 +336,32 @@ def add_comment(post_message_id: int, user_id: int, user_name: str, text: str) -
         )
 
 
-def add_note(kind: str, content: str, tags: list | None = None) -> int:
+def add_note(kind: str, content: str, branch: str = "inbox", tags: list | None = None) -> int:
     """Store a note/thought from Yulia. Returns new note id."""
     with cursor() as cur:
         cur.execute(
-            "INSERT INTO notes(kind, content, tags) VALUES (?, ?, ?)",
-            (kind, content, json.dumps(tags) if tags else None),
+            "INSERT INTO notes(kind, branch, content, tags) VALUES (?, ?, ?, ?)",
+            (kind, branch, content, json.dumps(tags) if tags else None),
         )
         return cur.lastrowid
 
 
-def list_notes(limit: int = 20, only_unused: bool = False) -> list[dict]:
-    """List recent notes, newest first."""
+def list_notes(limit: int = 20, only_unused: bool = False, branch: str | None = None) -> list[dict]:
+    """List recent notes, newest first. Filter by branch if specified."""
     sql = "SELECT * FROM notes"
+    where = []
+    params: list = []
     if only_unused:
-        sql += " WHERE used_in_post_id IS NULL"
+        where.append("used_in_post_id IS NULL")
+    if branch:
+        where.append("branch=?")
+        params.append(branch)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
     with cursor() as cur:
-        rows = cur.execute(sql, (limit,)).fetchall()
+        rows = cur.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 

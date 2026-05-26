@@ -37,35 +37,173 @@ def is_owner(update: Update) -> bool:
 
 # ---------- /start ----------
 
-MENU_MESSAGE = (
+BRANCH_LABELS = {
+    "planning": "📋 Планування",
+    "ideas": "💭 Ідеї & Матеріал",
+    "comms": "💬 Спілкування",
+    "stats": "📊 Статистика",
+    "settings": "⚙️ Налаштування",
+}
+
+
+def root_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Планування", callback_data="branch:planning")],
+        [InlineKeyboardButton("💭 Ідеї & Матеріал", callback_data="branch:ideas")],
+        [InlineKeyboardButton("💬 Спілкування", callback_data="branch:comms")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="branch:stats")],
+        [InlineKeyboardButton("⚙️ Налаштування", callback_data="branch:settings")],
+    ])
+
+
+def back_to_menu_keyboard(extra_rows: list[list[InlineKeyboardButton]] | None = None) -> InlineKeyboardMarkup:
+    rows = list(extra_rows or [])
+    rows.append([InlineKeyboardButton("🏠 До меню", callback_data="branch:root")])
+    return InlineKeyboardMarkup(rows)
+
+
+ROOT_MESSAGE = (
     "📌 YK MEDIA BOT · КОЗАЧКОВА ЮЛІЯ\n"
     "━━━━━━━━━━━━━━━━━━━━\n\n"
-    "🎯 ЦИКЛ — 3 дні вперед\n"
-    "Кожного вс/пн ранку я даю план на 3 дні.\n"
-    "Воскресенье — твоя ручна Карта тижня.\n\n"
-    "📋 ПЛАН\n"
-    "/next3 — наступні 3 дні (головне)\n"
+    "Обери розділ — у кожному свої команди й кнопки.\n"
+    "Усе що пишеш у вибраному розділі — записується саме туди.\n\n"
+    "📋 Планування — пости, розклад, пауза/перенос\n"
+    "💭 Ідеї & Матеріал — твої думки, голосові, цитати\n"
+    "💬 Спілкування — реакції, коменти, тренд\n"
+    "📊 Статистика — звіти, скріни, прогрес\n"
+    "⚙️ Налаштування — техніка бота\n\n"
+    "📐 Глобальні правила:\n"
+    "✓ Макс 3 пости/день (бот + ручні разом)\n"
+    "✓ Кожен пост — з візуалом\n"
+    "✓ Фото не повторюються 180 днів\n"
+    "✓ Пропущені пости — на твій вибір через /missed"
+)
+
+PLANNING_MESSAGE = (
+    "📋 ПЛАНУВАННЯ\n"
+    "━━━━━━━━━━━\n\n"
+    "📅 ПЕРЕГЛЯД ПЛАНУ\n"
+    "/next3 — 3 дні вперед (головне)\n"
     "/today — сьогодні\n"
     "/tomorrow — завтра\n"
-    "/plan — весь горизонт\n"
-    "/missed — пропущені (коли Mac був off)\n"
-    "/howstats — як надсилати стат каналу\n"
-    "/weekly — тижневий фідбек (авто вс 12:00)\n\n"
-    "🎛 НА КОЖНОМУ ПОСТІ КНОПКИ\n"
-    "📤 Publish Now · ✏️ Edit Text\n"
-    "🖼 Change Image · ⏰ Reschedule · 🗑 Delete\n\n"
-    "📊 АНАЛІТИКА\n"
-    "/stats — підписники + прогрес\n"
-    "/weekly — звіт (авто вс 12:00)\n\n"
+    "/plan — увесь горизонт\n\n"
+    "✏️ ПОСТ\n"
+    "/preview <id> — превʼю поста\n"
+    "/delete <id> — видалити\n"
+    "Кнопки на кожному пості: Publish · Edit · Image · Reschedule · Delete\n\n"
+    "⏰ ПРОПУЩЕНЕ\n"
+    "/missed — пости що пропустили слот\n\n"
     "⏸ КОНТРОЛЬ\n"
-    "/pause · /resume · /status\n\n"
-    "📐 ПРАВИЛА:\n"
-    "✓ Кожен пост — фото АБО інфографіка\n"
-    "✓ Фото з Drive не повторюються 180 днів\n"
-    "✓ Воскресенье 13:00 — твоя Карта тижня\n"
-    "✓ Пропущені пости НЕ публікуються автоматом —\n"
-    "  тільки вручну через 📤 Publish Now"
+    "/pause /resume — глобально\n"
+    "/status — стан бота\n\n"
+    "💡 Що писати в цьому розділі:\n"
+    "• «перенеси пост #19 на завтра 15:00»\n"
+    "• «прибери понеділок 17:30»\n"
+    "• «постав паузу на сьогодні»\n"
+    "Я збережу як note з тегом «planning» → застосую при наступній сесії."
 )
+
+IDEAS_MESSAGE = (
+    "💭 ІДЕЇ & МАТЕРІАЛ\n"
+    "━━━━━━━━━━━━━━\n\n"
+    "Це твій inbox. Скидай сюди:\n"
+    "• думку, інсайт, фразу що зацепила\n"
+    "• цитату клієнта / момент із сесії\n"
+    "• кадр життя (короткий опис)\n"
+    "• форвард з іншого каналу/чату\n"
+    "• голосове 30-60 сек\n\n"
+    "Команди:\n"
+    "/notes — останні 15 невикористаних\n"
+    "/notes all — повна історія\n\n"
+    "Що я роблю далі:\n"
+    "У наступній сесії Claude (я) читаю твої нотатки → плету у пости тижня → "
+    "ти бачиш у /preview яку нотатку я взяла."
+)
+
+COMMS_MESSAGE = (
+    "💬 СПІЛКУВАННЯ\n"
+    "━━━━━━━━━━━\n\n"
+    "Тут — взаємодія з підписниками каналу:\n"
+    "• реакції на пости (топ і провали)\n"
+    "• коменти в linked-чаті\n"
+    "• тренд настрою аудиторії\n\n"
+    "Поточно автоматично збираються:\n"
+    "✓ Реакції на пости (Bot API)\n"
+    "✓ Коменти у linked-чаті\n"
+    "✓ Приріст підписників (щоденний snapshot)\n\n"
+    "Що писати в цьому розділі:\n"
+    "• «треба відповісти на коментар під постом #32»\n"
+    "• «ось питання яке часто чую — зроби пост»\n"
+    "• «у мене в DM запитали Х — це болить багатьом»\n\n"
+    "Я збережу як note з тегом «comms» → у наступному пакеті зроблю пост-відповідь на цю тему."
+)
+
+STATS_MESSAGE = (
+    "📊 СТАТИСТИКА\n"
+    "━━━━━━━━━━━\n\n"
+    "📈 КОМАНДИ\n"
+    "/stats — швидкий зріз сьогодні (підписники + прогрес до цілі +500 до 30.06)\n"
+    "/weekly — тижневий звіт (авто щонеділі 12:00)\n"
+    "/howstats — як знімати скрін стат каналу\n\n"
+    "📸 СКРІНИ\n"
+    "Просто скинь скриншот статистики каналу — збережу й проаналізую.\n"
+    "Щонеділі 20:00 я сам нагадаю.\n\n"
+    "💡 Що писати в цьому розділі:\n"
+    "• твої спостереження по постах («#32 зайшов, бо…»)\n"
+    "• гіпотези («думаю карусель зайде краще ніж poll»)\n"
+    "Зберу як note з тегом «stats» → врахую при плануванні наступного тижня."
+)
+
+SETTINGS_MESSAGE = (
+    "⚙️ НАЛАШТУВАННЯ\n"
+    "━━━━━━━━━━━━\n\n"
+    "/status — поточний стан бота\n"
+    "/photos — каталог фото в Drive\n"
+    "/pause — глобальна пауза публікацій\n"
+    "/resume — відновити\n\n"
+    "ⓘ Поточно:\n"
+    "• Ліміт: 3 пости/день (бот + ручні)\n"
+    "• Часовий пояс: Europe/Kyiv\n"
+    "• Хостинг: Mac (caffeinate) — закритий ноут = бот off\n"
+    "• Cloud Render — у backlog (без диска free tier недоступний)\n\n"
+    "Що писати в цьому розділі:\n"
+    "• техзаявки («бот не публікує», «фото повторилось»)\n"
+    "• ідеї нових команд / кнопок\n"
+    "Збережу з тегом «settings» → виправлю/додам у наступній сесії."
+)
+
+BRANCH_SCREENS = {
+    "planning": PLANNING_MESSAGE,
+    "ideas": IDEAS_MESSAGE,
+    "comms": COMMS_MESSAGE,
+    "stats": STATS_MESSAGE,
+    "settings": SETTINGS_MESSAGE,
+}
+
+# Old constant kept for any legacy callers
+MENU_MESSAGE = ROOT_MESSAGE
+
+
+async def show_root_menu(update_or_query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show top-level menu and clear branch state."""
+    context.user_data["branch"] = None
+    kb = root_menu_keyboard()
+    if hasattr(update_or_query, "message") and update_or_query.message:
+        await update_or_query.message.reply_text(ROOT_MESSAGE, reply_markup=kb)
+    else:
+        await update_or_query.edit_message_text(ROOT_MESSAGE, reply_markup=kb)
+
+
+async def show_branch(query, context: ContextTypes.DEFAULT_TYPE, branch: str) -> None:
+    """Switch user into a branch and render its screen."""
+    text = BRANCH_SCREENS.get(branch)
+    if not text:
+        await query.answer("Невідомий розділ")
+        return
+    context.user_data["branch"] = branch
+    label = BRANCH_LABELS[branch]
+    kb = back_to_menu_keyboard()
+    await query.edit_message_text(f"{label}\n\n{text}", reply_markup=kb)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,9 +213,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         db.set_setting("owner_tg_id", user.id)
         db.set_setting("owner_username", user.username or "")
         await update.message.reply_text(f"👋 Привіт, {user.first_name}! Зафіксував тебе як власника.")
-        await update.message.reply_text(MENU_MESSAGE)
+        await show_root_menu(update, context)
     elif owner_id and user and user.id == int(owner_id):
-        await update.message.reply_text(MENU_MESSAGE)
+        await show_root_menu(update, context)
     else:
         await update.message.reply_text("Цей бот керується тільки власником каналу 🔒")
 
@@ -85,7 +223,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_owner(update):
         return
-    await update.message.reply_text(MENU_MESSAGE)
+    await show_root_menu(update, context)
+
+
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_owner(update):
+        return
+    await show_root_menu(update, context)
 
 
 # ---------- /plan ----------
@@ -384,6 +528,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     await q.answer()
     action, _, payload = (q.data or "").partition(":")
+
+    # Branch navigation (text payload, not numeric)
+    if action == "branch":
+        if payload == "root":
+            context.user_data["branch"] = None
+            await q.edit_message_text(ROOT_MESSAGE, reply_markup=root_menu_keyboard())
+        else:
+            await show_branch(q, context, payload)
+        return
+
     try:
         pid = int(payload)
     except ValueError:
@@ -481,6 +635,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     text = msg.text or ""
 
+    branch = context.user_data.get("branch") or "inbox"
+
     # Forwarded messages → save as note material for future posts
     if msg.forward_origin or msg.forward_from or msg.forward_from_chat:
         src = "forward"
@@ -491,8 +647,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 src = f"forward ({msg.forward_origin.type})"
         except Exception:
             pass
-        note_id = db.add_note(kind="forward", content=f"[{src}]\n{text}")
-        await msg.reply_text(f"📎 Форвард збережено як нотатку #{note_id}. Використаю при плануванні.")
+        note_id = db.add_note(kind="forward", branch=branch, content=f"[{src}]\n{text}")
+        await msg.reply_text(
+            f"📎 Форвард збережено як нотатку #{note_id} (розділ: {BRANCH_LABELS.get(branch, branch)}).",
+        )
         return
 
     # Edit text continuation
@@ -543,12 +701,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Free text from Yulia → save as a note (her thought / material for posts).
     # Claude reads /notes in next session and weaves them into post drafts.
     if text.strip():
-        note_id = db.add_note(kind="text", content=text)
+        note_id = db.add_note(kind="text", branch=branch, content=text)
         today_total = db.notes_today_count()
+        branch_label = BRANCH_LABELS.get(branch, "💭 Inbox")
         await msg.reply_text(
-            f"💭 Думку збережено як нотатку #{note_id}.\n"
-            f"Сьогодні від тебе: {today_total} нотаток. Усе піде у наступне планування.\n\n"
-            f"/notes — переглянути останні · /help — команди"
+            f"💭 Збережено як #{note_id} у розділ «{branch_label}».\n"
+            f"Сьогодні від тебе: {today_total} нотаток.\n\n"
+            f"/notes — останні · /menu — змінити розділ"
         )
 
 
@@ -632,7 +791,8 @@ async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     content_block = f"[voice {duration}s · {out_path.name}]"
     if caption:
         content_block += f"\nCaption: {caption}"
-    note_id = db.add_note(kind="voice", content=content_block)
+    branch = context.user_data.get("branch") or "inbox"
+    note_id = db.add_note(kind="voice", branch=branch, content=content_block)
 
     await msg.reply_text(
         f"🎙 Голосове {duration} сек збережено як нотатку #{note_id}.\n"
@@ -658,6 +818,7 @@ async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Голосові теж можна (зберігаю файл, потім переслухаю)."
         )
         return
+    branch_icons = {"planning": "📋", "ideas": "💭", "comms": "💬", "stats": "📊", "settings": "⚙️", "inbox": "📥"}
     lines = [f"💭 Нотатки ({'невикористані' if only_unused else 'усі'}):\n"]
     for r in rows:
         ts_local = ""
@@ -666,11 +827,13 @@ async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ts_local = _dt.fromisoformat(r["created_at"]).astimezone(TZ).strftime("%d.%m %H:%M")
         except Exception:
             ts_local = (r["created_at"] or "")[:16]
-        icon = {"text": "📝", "voice": "🎙", "forward": "📎", "photo": "🖼"}.get(r["kind"], "•")
-        preview = (r["content"] or "")[:90].replace("\n", " ")
-        used = f" → пост #{r['used_in_post_id']}" if r["used_in_post_id"] else ""
-        lines.append(f"#{r['id']} {icon} {ts_local}  {preview}{used}")
-    lines.append("\n/notes all — показати усі (включно з використаними)")
+        kind_icon = {"text": "📝", "voice": "🎙", "forward": "📎", "photo": "🖼"}.get(r["kind"], "•")
+        br = r.get("branch") or "inbox"
+        br_icon = branch_icons.get(br, "•")
+        preview = (r["content"] or "")[:80].replace("\n", " ")
+        used = f" → #{r['used_in_post_id']}" if r["used_in_post_id"] else ""
+        lines.append(f"#{r['id']} {br_icon}{kind_icon} {ts_local}  {preview}{used}")
+    lines.append("\n/notes all — усі · /menu — обрати розділ")
     await update.message.reply_text("\n".join(lines))
 
 

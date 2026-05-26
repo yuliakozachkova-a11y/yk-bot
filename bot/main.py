@@ -20,6 +20,7 @@ from .handlers import (
     cmd_delete,
     cmd_help,
     cmd_howstats,
+    cmd_menu,
     cmd_missed,
     cmd_next3,
     cmd_notes,
@@ -92,6 +93,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("weekly", cmd_weekly))
     app.add_handler(CommandHandler("photos", cmd_photos))
     app.add_handler(CommandHandler("notes", cmd_notes))
+    app.add_handler(CommandHandler("menu", cmd_menu))
 
     # Inline buttons
     app.add_handler(CallbackQueryHandler(on_callback))
