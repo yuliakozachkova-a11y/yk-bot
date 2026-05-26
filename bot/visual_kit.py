@@ -541,6 +541,139 @@ def make_portrait_quote(params: dict, out_path: Path) -> Path:
     return out_path
 
 
+# ============ TEMPLATE: mood_check (warm engagement, simple question) ============
+
+def make_mood_check(params: dict, out_path: Path) -> Path:
+    """Lightweight engagement card — short question, 3 reactions as visual cards.
+
+    Markers are drawn via PIL shapes (not text glyphs) so they always render.
+    Keep emoji OUT of the image params — they belong in the Telegram caption.
+
+    params:
+        question — short prompt (e.g. 'Як ти зараз?')
+        reactions — list of 3 short labels (e.g. ['у потоці', 'спокій', 'вимотана'])
+        sign_off (opt) — small line at bottom (plain text, no emoji)
+        palette (opt) — default 'bw' (clean white)
+        marker_style (opt) — 'pills' (default) or 'dots'
+    """
+    W, H = 1080, 1080
+    p = get_palette(params.get("palette", "bw"))
+    img = _gradient_bg(W, H, p).convert("RGBA")
+    if p is not PALETTE_BW:
+        _glow(img, 540, 540, 500, p["glow_warm"], opacity=35)
+    img = img.convert("RGB")
+    d = ImageDraw.Draw(img)
+
+    # Top accent
+    d.line((W // 2 - 60, 180, W // 2 + 60, 180), fill=p["accent"], width=3)
+    d.text((W // 2, 220), "ЛЕГКЕ ПИТАННЯ", fill=p["dim"], anchor="mm", font=_font(20, bold=True))
+
+    # Big question (centered, big)
+    q = params["question"]
+    q_lines = _wrap(q, 20)
+    y = 380
+    for line in q_lines[:3]:
+        d.text((W // 2, y), line, fill=p["text"], anchor="mm", font=_font(56, bold=True))
+        y += 70
+
+    # 3 reactions as visual pills (drawn rectangles, not text glyphs)
+    reactions = list(params.get("reactions", []))[:3]
+    pill_w, pill_h = 520, 70
+    pill_x = (W - pill_w) // 2
+    ry = max(y + 60, 640)
+    accent_rgb = tuple(int(p["accent"].lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    for i, r in enumerate(reactions):
+        py = ry + i * (pill_h + 20)
+        # Outer pill outline
+        d.rounded_rectangle((pill_x, py, pill_x + pill_w, py + pill_h),
+                            radius=pill_h // 2, outline=p["accent"], width=2)
+        # Left circle marker (filled with accent)
+        marker_cx = pill_x + pill_h // 2
+        marker_cy = py + pill_h // 2
+        d.ellipse((marker_cx - 14, marker_cy - 14, marker_cx + 14, marker_cy + 14),
+                  fill=p["accent"])
+        # Number inside marker
+        d.text((marker_cx, marker_cy), str(i + 1), fill=p["bg_top"][:3] if isinstance(p["bg_top"], tuple) else "#FFFFFF",
+               anchor="mm", font=_font(18, bold=True))
+        # Label
+        d.text((marker_cx + 30, marker_cy), r, fill=p["text"], anchor="lm",
+               font=_font(28, bold=True))
+
+    # Bottom — gentle nudge
+    sign = params.get("sign_off", "Постав реакцію або напиши у коментарях")
+    d.line((W // 2 - 200, 980, W // 2 + 200, 980), fill=p["accent"], width=2)
+    d.text((W // 2, 1020), sign, fill=p["accent"], anchor="mm", font=_font(20, italic=True))
+
+    if p is not PALETTE_BW:
+        _grain(img, 4)
+    img.save(out_path, quality=95, optimize=True)
+    return out_path
+
+
+# ============ TEMPLATE: youtube_takeaway (1-3 insights + open question + CTA) ============
+
+def make_youtube_takeaway(params: dict, out_path: Path) -> Path:
+    """YouTube digest with takeaway-style insights + provoking question.
+    params:
+        episode_title — short label (e.g. 'Синдром жертви — повний випуск')
+        insights — list of 1-3 short takeaways (each one short sentence)
+        question — open question to spark comments
+        channel_label (opt) — '@kozachkova.yuliia' or '@lyusterko'
+        palette (opt) — default 'navy_book'
+    """
+    W, H = 1080, 1080
+    p = get_palette(params.get("palette", "navy_book"))
+    img = _gradient_bg(W, H, p).convert("RGBA")
+    _glow(img, 540, 200, 500, p["glow_warm"], opacity=40)
+    _glow(img, 540, 900, 400, p["glow_wine"], opacity=30)
+    img = img.convert("RGB")
+    d = ImageDraw.Draw(img)
+
+    # YOUTUBE pill
+    pill_x, pill_y, pill_w, pill_h = 380, 80, 320, 60
+    d.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=30, fill=p["accent"])
+    d.text((W // 2, pill_y + pill_h // 2), "▶︎ YOUTUBE · ВИПУСК", fill="#1A1015", anchor="mm", font=_font(22, bold=True))
+
+    # Episode title (centered, 2 lines max)
+    title = params["episode_title"]
+    title_lines = _wrap(title, 24)
+    y = 210
+    for line in title_lines[:2]:
+        d.text((W // 2, y), line, fill=p["text"], anchor="mm", font=_font(40, bold=True))
+        y += 50
+
+    # Insights — numbered, big
+    insights = list(params["insights"])[:3]
+    box_top = max(y + 60, 380)
+    box_h = 130
+    for i, ins in enumerate(insights):
+        cy = box_top + i * box_h
+        # Big number
+        d.text((110, cy + box_h // 2 - 20), str(i + 1), fill=p["accent"], anchor="mm", font=_font(72, bold=True))
+        # Insight lines wrapped
+        ins_lines = _wrap(ins, 32)
+        ty = cy + box_h // 2 - (len(ins_lines) - 1) * 20
+        for line in ins_lines[:3]:
+            d.text((200, ty), line, fill=p["text"], anchor="lm", font=_font(24, bold=True))
+            ty += 36
+
+    # Open question — provoke comments
+    qbox_y = max(box_top + len(insights) * box_h + 30, 820)
+    d.line((W // 2 - 200, qbox_y, W // 2 + 200, qbox_y), fill=p["accent"], width=2)
+    question = params["question"]
+    q_lines = _wrap(question, 36)
+    for i, line in enumerate(q_lines[:2]):
+        d.text((W // 2, qbox_y + 40 + i * 36), line, fill=p["text"], anchor="mm", font=_font(24, italic=True))
+
+    # Bottom — channel handle
+    handle = params.get("channel_label", "@kozachkova.yuliia")
+    d.text((W // 2, 1030), f"ПОВНИЙ ВИПУСК · {handle}", fill=p["accent"], anchor="mm", font=_font(20, bold=True))
+
+    _grain(img, 6)
+    img.save(out_path, quality=95, optimize=True)
+    return out_path
+
+
 # ---------- registry ----------
 
 TEMPLATES: dict[str, Callable[[dict, Path], Path]] = {
@@ -551,6 +684,8 @@ TEMPLATES: dict[str, Callable[[dict, Path], Path]] = {
     "trichlen": make_trichlen,
     "book_excerpt": make_book_excerpt,
     "portrait_quote": make_portrait_quote,
+    "mood_check": make_mood_check,
+    "youtube_takeaway": make_youtube_takeaway,
 }
 
 
