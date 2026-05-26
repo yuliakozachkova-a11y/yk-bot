@@ -22,6 +22,7 @@ from .handlers import (
     cmd_howstats,
     cmd_missed,
     cmd_next3,
+    cmd_notes,
     cmd_pause,
     cmd_photos,
     cmd_plan,
@@ -37,6 +38,7 @@ from .handlers import (
     on_channel_post,
     on_photo,
     on_text,
+    on_voice,
 )
 from .publisher import publish_due, snapshot_subscribers, sunday_stats_reminder, weekly_report_job
 from .youtube_watcher import poll_all_channels
@@ -89,6 +91,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("howstats", cmd_howstats))
     app.add_handler(CommandHandler("weekly", cmd_weekly))
     app.add_handler(CommandHandler("photos", cmd_photos))
+    app.add_handler(CommandHandler("notes", cmd_notes))
 
     # Inline buttons
     app.add_handler(CallbackQueryHandler(on_callback))
@@ -97,6 +100,8 @@ def build_app() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     # Photo messages (for 'change image' workflow)
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
+    # Voice / audio notes from owner
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, on_voice))
     # Channel posts (count toward 3/day quota — bot + manual)
     app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POST, on_channel_post))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_CHANNEL_POST, on_channel_post))

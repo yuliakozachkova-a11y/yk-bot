@@ -91,6 +91,18 @@ CREATE TABLE IF NOT EXISTS channel_activity (
     posted_at TEXT DEFAULT (datetime('now'))  -- UTC
 );
 CREATE INDEX IF NOT EXISTS idx_channel_activity_posted ON channel_activity(posted_at);
+
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT,                         -- 'text' | 'voice' | 'photo' | 'forward'
+    content TEXT,                      -- text content OR file path for voice/photo
+    transcript TEXT,                   -- voice transcript (filled later)
+    tags TEXT,                         -- JSON array of tags (optional)
+    used_in_post_id INTEGER,           -- if used in a published post — link
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at);
+CREATE INDEX IF NOT EXISTS idx_notes_unused ON notes(used_in_post_id);
 """
 
 # Hard quota: max posts per Kyiv day across bot + manual.
@@ -308,6 +320,40 @@ def add_comment(post_message_id: int, user_id: int, user_name: str, text: str) -
             "INSERT INTO comments(post_message_id, user_id, user_name, text) VALUES (?, ?, ?, ?)",
             (post_message_id, user_id, user_name, text),
         )
+
+
+def add_note(kind: str, content: str, tags: list | None = None) -> int:
+    """Store a note/thought from Yulia. Returns new note id."""
+    with cursor() as cur:
+        cur.execute(
+            "INSERT INTO notes(kind, content, tags) VALUES (?, ?, ?)",
+            (kind, content, json.dumps(tags) if tags else None),
+        )
+        return cur.lastrowid
+
+
+def list_notes(limit: int = 20, only_unused: bool = False) -> list[dict]:
+    """List recent notes, newest first."""
+    sql = "SELECT * FROM notes"
+    if only_unused:
+        sql += " WHERE used_in_post_id IS NULL"
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    with cursor() as cur:
+        rows = cur.execute(sql, (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_note_used(note_id: int, post_id: int) -> None:
+    with cursor() as cur:
+        cur.execute("UPDATE notes SET used_in_post_id=? WHERE id=?", (post_id, note_id))
+
+
+def notes_today_count() -> int:
+    with cursor() as cur:
+        row = cur.execute(
+            "SELECT COUNT(*) FROM notes WHERE date(created_at,'localtime')=date('now','localtime')"
+        ).fetchone()
+    return row[0] if row else 0
 
 
 def record_channel_post(

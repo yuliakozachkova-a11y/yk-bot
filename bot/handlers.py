@@ -481,13 +481,19 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     text = msg.text or ""
 
-    # Forwarded messages → silently store as content material for future posts
+    # Forwarded messages → save as note material for future posts
     if msg.forward_origin or msg.forward_from or msg.forward_from_chat:
-        db.log_event("forward_received", {
-            "from": str(getattr(msg.forward_origin, "type", "") or msg.forward_from_chat.title if msg.forward_from_chat else "user"),
-            "text_preview": text[:200],
-        })
-        return  # no reply — Yulia uses forwards to share material
+        src = "forward"
+        try:
+            if msg.forward_from_chat:
+                src = f"forward from {msg.forward_from_chat.title}"
+            elif msg.forward_origin:
+                src = f"forward ({msg.forward_origin.type})"
+        except Exception:
+            pass
+        note_id = db.add_note(kind="forward", content=f"[{src}]\n{text}")
+        await msg.reply_text(f"📎 Форвард збережено як нотатку #{note_id}. Використаю при плануванні.")
+        return
 
     # Edit text continuation
     pid = context.user_data.pop("editing_post_id", None)
@@ -534,8 +540,16 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(f"📁 Зафіксував Google Drive як папку з фото:\n{text.strip()}")
         return
 
-    # Otherwise — gentle hint, only short message
-    await msg.reply_text("🤖 Команди: /plan /today /stats /help")
+    # Free text from Yulia → save as a note (her thought / material for posts).
+    # Claude reads /notes in next session and weaves them into post drafts.
+    if text.strip():
+        note_id = db.add_note(kind="text", content=text)
+        today_total = db.notes_today_count()
+        await msg.reply_text(
+            f"💭 Думку збережено як нотатку #{note_id}.\n"
+            f"Сьогодні від тебе: {today_total} нотаток. Усе піде у наступне планування.\n\n"
+            f"/notes — переглянути останні · /help — команди"
+        )
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -585,6 +599,79 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"При наступному відкритті Claude я проаналізую цей скрін і додам дані у engagement-розрахунок.\n\n"
         f"Дякую 🤍"
     )
+
+
+# ---------- voice notes (Yulia speaks → save for next planning) ----------
+
+async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Voice / audio note from owner. Save .ogg file + create a note entry.
+    Transcription happens in next Claude session (Yulia can also resend as text).
+    """
+    if not is_owner(update):
+        return
+    msg = update.message
+    voice = msg.voice or msg.audio
+    if not voice:
+        return
+
+    from datetime import datetime as _dt
+    voice_dir = config.DATA_DIR / "voice_notes"
+    voice_dir.mkdir(exist_ok=True)
+    ts = _dt.now().strftime("%Y-%m-%d_%H%M%S")
+    out_path = voice_dir / f"voice_{ts}_{voice.file_id[:8]}.ogg"
+
+    try:
+        file = await voice.get_file()
+        await file.download_to_drive(str(out_path))
+    except Exception as e:
+        await msg.reply_text(f"❌ Не зміг зберегти голосове: {e}")
+        return
+
+    duration = getattr(voice, "duration", 0)
+    caption = (msg.caption or "").strip()
+    content_block = f"[voice {duration}s · {out_path.name}]"
+    if caption:
+        content_block += f"\nCaption: {caption}"
+    note_id = db.add_note(kind="voice", content=content_block)
+
+    await msg.reply_text(
+        f"🎙 Голосове {duration} сек збережено як нотатку #{note_id}.\n"
+        f"Файл: {out_path.name}\n\n"
+        f"⚠️ Я ще не вмію розшифровувати голосові автоматично — у наступній сесії "
+        f"Claude переслухає й використає. Якщо термінова думка — продублюй текстом, "
+        f"це швидше потрапить у пост."
+    )
+
+
+# ---------- /notes — view recent notes ----------
+
+async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_owner(update):
+        return
+    only_unused = "all" not in (context.args or [])
+    rows = db.list_notes(limit=15, only_unused=only_unused)
+    if not rows:
+        await update.message.reply_text(
+            "📭 Нотаток поки немає.\n\n"
+            "Просто пиши сюди будь-яку думку, інсайт із сесії, цитату клієнта, "
+            "фразу яку почула — я збережу й вплету у наступні пости.\n"
+            "Голосові теж можна (зберігаю файл, потім переслухаю)."
+        )
+        return
+    lines = [f"💭 Нотатки ({'невикористані' if only_unused else 'усі'}):\n"]
+    for r in rows:
+        ts_local = ""
+        try:
+            from datetime import datetime as _dt
+            ts_local = _dt.fromisoformat(r["created_at"]).astimezone(TZ).strftime("%d.%m %H:%M")
+        except Exception:
+            ts_local = (r["created_at"] or "")[:16]
+        icon = {"text": "📝", "voice": "🎙", "forward": "📎", "photo": "🖼"}.get(r["kind"], "•")
+        preview = (r["content"] or "")[:90].replace("\n", " ")
+        used = f" → пост #{r['used_in_post_id']}" if r["used_in_post_id"] else ""
+        lines.append(f"#{r['id']} {icon} {ts_local}  {preview}{used}")
+    lines.append("\n/notes all — показати усі (включно з використаними)")
+    await update.message.reply_text("\n".join(lines))
 
 
 # ---------- channel post listener (for daily 3-post quota) ----------
