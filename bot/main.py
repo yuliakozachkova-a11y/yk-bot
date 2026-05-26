@@ -42,7 +42,7 @@ from .handlers import (
     on_voice,
 )
 from .publisher import publish_due, snapshot_subscribers, sunday_stats_reminder, weekly_report_job
-from .auto_live_posts import tuesday_morning_reminder, tuesday_evening_recap
+from .auto_live_posts import monday_evening_preview, tuesday_morning_reminder
 from .youtube_watcher import poll_all_channels
 
 logging.basicConfig(
@@ -128,18 +128,18 @@ def build_app() -> Application:
             days=(6,),
         )
 
-        # Tuesday 08:00 Kyiv — morning reminder for 08:30 YouTube live reading
+        # Monday 19:00 Kyiv — preview: 'завтра о 8:30 ефір'
+        app.job_queue.run_daily(
+            monday_evening_preview,
+            time(hour=19, minute=0, tzinfo=tz),
+            days=(0,),  # 0 = Monday
+        )
+
+        # Tuesday 08:00 Kyiv — final reminder for the 08:30 YouTube live reading
         app.job_queue.run_daily(
             tuesday_morning_reminder,
             time(hour=8, minute=0, tzinfo=tz),
             days=(1,),  # 1 = Tuesday
-        )
-
-        # Tuesday 19:00 Kyiv — gentle evening recap with VOD link
-        app.job_queue.run_daily(
-            tuesday_evening_recap,
-            time(hour=19, minute=0, tzinfo=tz),
-            days=(1,),
         )
 
         # Sunday 20:00 Kyiv — ping Yulia to send channel stats screenshot

@@ -1,10 +1,11 @@
 """Automated weekly posts around Tuesday 08:30 YouTube live readings.
 
-Two jobs:
-  • tuesday_morning_reminder — Tue 08:00 Kyiv: post a 'live in 30 min' card
-  • tuesday_evening_recap     — Tue 19:00 Kyiv: post a 'recap + come watch VOD'
+Two jobs (both BEFORE the live, never after — Yulia 2026-05-26):
+  • monday_evening_preview   — Mon 19:00 Kyiv: 'завтра о 8:30' anticipation card
+  • tuesday_morning_reminder — Tue 08:00 Kyiv: 'сьогодні о 8:30' final reminder
 
-Both are JobQueue.run_daily(... days=(1,)) where 1 = Tuesday in python-telegram-bot.
+Both are JobQueue.run_daily with days=(0,) for Monday or (1,) for Tuesday.
+Python-telegram-bot day numbering: 0=Mon, 1=Tue, ..., 6=Sun.
 
 Episode catalog is the fixed list of scheduled live streams created on YouTube
 (см. memory project_youtube_readings.md). Edit LIVE_EPISODES when you add new
@@ -13,7 +14,7 @@ streams after 2026-07-28.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from telegram.ext import ContextTypes
@@ -105,38 +106,40 @@ async def tuesday_morning_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("Tuesday morning reminder seeded post #%s for episode %s", pid, ep["num"])
 
 
-# ---------- Tuesday 19:00 evening recap ----------
+# ---------- Monday 19:00 evening preview (next-day anticipation) ----------
 
-async def tuesday_evening_recap(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """After the morning live — gentle 'come watch VOD' post."""
+async def monday_evening_preview(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mon 19:00 Kyiv — 'завтра о 8:30' anticipation card for tomorrow's live."""
     now = datetime.now(TZ)
-    if now.weekday() != 1:
+    if now.weekday() != 0:  # 0 = Monday
         return
 
-    ep = _episode_for_today(now.date())
+    tomorrow = now.date() + timedelta(days=1)
+    ep = _episode_for_today(tomorrow)
     if not ep:
-        log.info("No live episode today (%s) — skip evening recap", now.date().isoformat())
+        log.info("No live episode tomorrow (%s) — skip Monday preview", tomorrow.isoformat())
         return
 
     try:
         img_path = visual_kit.render(
-            "quote_hero",
+            "live_announce",
             {
-                "quote": "Жива книга — не про слова. Про присутність між сторінками.",
-                "author": "Юлія Козачкова",
-                "source": f"Жива книга · Зустріч №{ep['num']}",
+                "episode_num": ep["num"],
+                "book_title": BOOK_TITLE,
+                "date_label": "Завтра",
+                "time_label": "08:30",
             },
-            filename_hint=f"live_recap_ep{ep['num']}",
+            filename_hint=f"live_monday_preview_ep{ep['num']}",
         )
     except Exception as e:
-        log.exception("recap visual failed: %s", e)
+        log.exception("Monday preview visual failed: %s", e)
         return
 
     text = (
-        f"Любі, по гарячих слідах ранкового ефіру ❤️‍🔥\n\n"
-        f"Сьогодні читали Зустріч №{ep['num']}: «{BOOK_TITLE}».\n"
-        f"Запис уже на каналі — можеш переглянути зручно ввечері з чашкою чаю.\n\n"
-        f"Який момент сьогоднішнього читання тебе зачепив найбільше?"
+        f"Любі, нагадую — завтра о 8:30 жива книга на YouTube 🤍\n\n"
+        f"Зустріч №{ep['num']}: «{BOOK_TITLE}».\n"
+        f"Читаю по-чесному, між сторінками діляся думками.\n\n"
+        f"Зранку ще нагадаю — тут і кав'ярка готова буде ☕"
     )
 
     pid = db.add_post(
@@ -144,10 +147,10 @@ async def tuesday_evening_recap(context: ContextTypes.DEFAULT_TYPE) -> None:
         text=text,
         media_type="photo",
         media_path=str(img_path),
-        inline_buttons=[{"text": "Подивитись запис ▶︎", "url": ep["url"]}],
+        inline_buttons=[{"text": "Поставити нагадування ▶︎", "url": ep["url"]}],
         source="auto_live",
-        genre="live_evening_recap",
+        genre="live_monday_preview",
         metadata={"episode_num": ep["num"], "url": ep["url"]},
     )
-    db.log_event("auto_live_recap_seeded", {"post_id": pid, "episode": ep["num"]})
-    log.info("Tuesday evening recap seeded post #%s for episode %s", pid, ep["num"])
+    db.log_event("auto_live_monday_seeded", {"post_id": pid, "episode": ep["num"]})
+    log.info("Monday evening preview seeded post #%s for ep %s", pid, ep["num"])
