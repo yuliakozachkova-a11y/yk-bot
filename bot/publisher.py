@@ -83,7 +83,42 @@ async def publish_due(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not due:
         return
 
+    # Hard daily quota: max 3 posts/day (bot + manual). Skip if already at/over.
+    from .db import DAILY_POST_QUOTA
+    already_today = db.posts_today_count()
+    if already_today >= DAILY_POST_QUOTA:
+        breakdown = db.posts_today_breakdown()
+        log.warning(f"Quota reached: {already_today}/{DAILY_POST_QUOTA} today {breakdown}. Skipping {len(due)} due posts.")
+        # Notify owner once per day per skipped slot
+        if owner_id:
+            for post in due:
+                try:
+                    from .handlers import fmt_local
+                    await bot.send_message(
+                        owner_id,
+                        f"⏸ Пост #{post['id']} ({post['genre']}) пропущено — сьогодні вже {already_today} постів у каналі (ліміт {DAILY_POST_QUOTA}/день).\n"
+                        f"Помічено як missed. Якщо хочеш все одно опублікувати — /missed → 📤 Publish Now.",
+                    )
+                except Exception:
+                    log.exception("quota-skip notify failed")
+                db.mark_missed(post["id"])
+        return
+
     for post in due:
+        # Re-check inside the loop in case a manual post landed mid-batch
+        if db.posts_today_count() >= DAILY_POST_QUOTA:
+            log.warning(f"Quota hit mid-batch. Skipping remaining {len(due)} posts.")
+            if owner_id:
+                try:
+                    await bot.send_message(
+                        owner_id,
+                        f"⏸ Ліміт {DAILY_POST_QUOTA}/день досягнуто під час пакету. "
+                        f"Решта постів сьогодні пропущена (помічено missed).",
+                    )
+                except Exception:
+                    pass
+            db.mark_missed(post["id"])
+            continue
         try:
             await _publish_one(bot, post)
         except Exception as e:
@@ -148,6 +183,14 @@ async def _publish_one(bot, post: dict) -> None:
     if sent:
         db.mark_published(post["id"], sent.message_id)
         db.log_event("published", {"post_id": post["id"], "message_id": sent.message_id})
+        # Direct quota record (insurance — channel_post handler also records via update)
+        db.record_channel_post(
+            message_id=sent.message_id,
+            source="bot",
+            author_name="YK_Media_Bot",
+            text_preview=(post["text"] or "")[:80],
+            has_media=bool(post.get("media_type") in ("photo", "video")),
+        )
 
 
 async def snapshot_subscribers(context: ContextTypes.DEFAULT_TYPE) -> None:

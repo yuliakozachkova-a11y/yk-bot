@@ -585,3 +585,55 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"При наступному відкритті Claude я проаналізую цей скрін і додам дані у engagement-розрахунок.\n\n"
         f"Дякую 🤍"
     )
+
+
+# ---------- channel post listener (for daily 3-post quota) ----------
+
+async def on_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Listen to every post in the channel (bot OR manual from Yulia/team).
+    Records into channel_activity so publish_due can enforce the 3/day quota.
+    """
+    msg = update.channel_post or update.edited_channel_post
+    if not msg:
+        return
+    # Only our channel matters
+    if msg.chat.id != config.CHANNEL_ID:
+        return
+
+    # 'bot' if author_signature mentions the bot OR via_bot, else 'manual'
+    # NB: posts the bot itself sent also produce channel_post updates;
+    # we tag them 'bot' so they count toward the same quota.
+    via_bot = bool(msg.via_bot and msg.via_bot.id == config.BOT_ID)
+    posted_by_bot = via_bot or (msg.from_user and msg.from_user.id == config.BOT_ID)
+    source = "bot" if posted_by_bot else "manual"
+
+    author_name = msg.author_signature or (msg.from_user.full_name if msg.from_user else None)
+    text_preview = msg.text or msg.caption or ""
+    has_media = bool(msg.photo or msg.video or msg.document or msg.animation)
+
+    db.record_channel_post(
+        message_id=msg.message_id,
+        source=source,
+        author_name=author_name,
+        text_preview=text_preview,
+        has_media=has_media,
+    )
+
+    # If manual post just landed and pushed us OVER quota — notify owner so she
+    # can decide which bot post to reschedule.
+    if source == "manual":
+        today_total = db.posts_today_count()
+        from .db import DAILY_POST_QUOTA
+        if today_total > DAILY_POST_QUOTA:
+            owner_id_raw = db.get_setting("owner_tg_id")
+            if owner_id_raw:
+                try:
+                    await context.bot.send_message(
+                        int(owner_id_raw),
+                        f"⚠️ В каналі сьогодні вже {today_total} постів (ліміт {DAILY_POST_QUOTA}). "
+                        f"Бот пропустить наступні scheduled слоти сьогодні. "
+                        f"Якщо хочеш зберегти бот-пост — використай /next3 → 🗑 Delete на ручному пості "
+                        f"АБО /pause щоб бот сьогодні мовчав.",
+                    )
+                except Exception:
+                    pass

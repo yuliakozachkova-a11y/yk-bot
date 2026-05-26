@@ -81,7 +81,20 @@ CREATE TABLE IF NOT EXISTS event_log (
     payload TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS channel_activity (
+    message_id INTEGER PRIMARY KEY,
+    source TEXT,                       -- 'bot' | 'manual'
+    author_name TEXT,                  -- channel signature, if available
+    text_preview TEXT,                 -- first 80 chars
+    has_media INTEGER DEFAULT 0,
+    posted_at TEXT DEFAULT (datetime('now'))  -- UTC
+);
+CREATE INDEX IF NOT EXISTS idx_channel_activity_posted ON channel_activity(posted_at);
 """
+
+# Hard quota: max posts per Kyiv day across bot + manual.
+DAILY_POST_QUOTA = 3
 
 
 def init_db() -> None:
@@ -295,6 +308,43 @@ def add_comment(post_message_id: int, user_id: int, user_name: str, text: str) -
             "INSERT INTO comments(post_message_id, user_id, user_name, text) VALUES (?, ?, ?, ?)",
             (post_message_id, user_id, user_name, text),
         )
+
+
+def record_channel_post(
+    message_id: int,
+    source: str,
+    author_name: str | None = None,
+    text_preview: str | None = None,
+    has_media: bool = False,
+) -> None:
+    """Log a channel post (bot-published OR manual from Yulia/team). Idempotent."""
+    with cursor() as cur:
+        cur.execute(
+            "INSERT OR IGNORE INTO channel_activity(message_id, source, author_name, text_preview, has_media) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (message_id, source, author_name, (text_preview or "")[:80], 1 if has_media else 0),
+        )
+
+
+def posts_today_count() -> int:
+    """Count posts in channel today (Kyiv local day) — bot + manual combined."""
+    with cursor() as cur:
+        row = cur.execute(
+            "SELECT COUNT(*) FROM channel_activity "
+            "WHERE date(posted_at, 'localtime') = date('now', 'localtime')"
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def posts_today_breakdown() -> dict:
+    """Today's posts grouped by source — for quota messages."""
+    with cursor() as cur:
+        rows = cur.execute(
+            "SELECT source, COUNT(*) FROM channel_activity "
+            "WHERE date(posted_at, 'localtime') = date('now', 'localtime') "
+            "GROUP BY source"
+        ).fetchall()
+    return {r[0]: r[1] for r in rows}
 
 
 def log_event(kind: str, payload: dict | str | None = None) -> None:

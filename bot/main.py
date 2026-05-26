@@ -34,6 +34,7 @@ from .handlers import (
     cmd_tomorrow,
     cmd_weekly,
     on_callback,
+    on_channel_post,
     on_photo,
     on_text,
 )
@@ -96,6 +97,9 @@ def build_app() -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     # Photo messages (for 'change image' workflow)
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
+    # Channel posts (count toward 3/day quota — bot + manual)
+    app.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POST, on_channel_post))
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_CHANNEL_POST, on_channel_post))
 
     # JobQueue
     tz = ZoneInfo(config.TIMEZONE)
@@ -146,7 +150,14 @@ def main() -> None:
         try:
             app = build_app()
             log.info("Polling started")
-            app.run_polling(allowed_updates=["message", "callback_query", "message_reaction", "message_reaction_count"])
+            app.run_polling(allowed_updates=[
+                "message",
+                "callback_query",
+                "message_reaction",
+                "message_reaction_count",
+                "channel_post",         # listen to all channel posts (quota tracking)
+                "edited_channel_post",
+            ])
             break  # graceful shutdown
         except Conflict as e:
             wait = 120 if role == "backup" else 30
